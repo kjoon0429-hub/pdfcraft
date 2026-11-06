@@ -57,6 +57,8 @@ pub use edit_text_ui::{CropMode, DragTarget, ImageDrag, ImageHandle, ImageSelect
 mod editing;
 mod home;
 mod hotbar;
+mod page_carry;
+pub use page_carry::PageCarry;
 mod panels;
 pub use print_ui::{Handling as PrintHandling, OptionsSource, PrintDraft, PrinterSource, Which as PrintWhich, system_printers};
 pub use redact_ui::{HiddenDraft, PagesDraft as RedactPagesDraft, RedactPrefs, SearchDraft as RedactSearchDraft, SearchMode as RedactSearchMode};
@@ -630,6 +632,10 @@ pub struct PdfCraftApp {
     pub progress_notice: Option<widgets::ProgressNotice>,
     /// Pages copied or cut in Organize Pages, ready to paste (into any document).
     pub page_clipboard: Option<PageClip>,
+    /// Pages dragged out of a Pages panel, on their way to another document's (see [`page_carry`]).
+    pub page_carry: Option<PageCarry>,
+    /// The document tab dragged pages rest on, and since when.
+    tab_spring: Option<(DocId, f64)>,
     /// Copied comments (XFDF), to paste into this or another document (M14).
     pub comment_clipboard: Option<CommentClip>,
     /// Objects copied together in Edit a PDF, to paste into this or another document (#5989).

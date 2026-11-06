@@ -17,6 +17,8 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     let mut bm_action: Option<BmAction> = None;
     let mut bm_expand: Option<usize> = None;
     let mut panel_edit: Option<pdfcraft_engine::Edit> = None;
+    // The gap pages carried from another tab were dropped on.
+    let mut carried: Option<usize> = None;
     let mut field_properties = None;
     let mut panel_command: Option<&'static str> = None;
     let mut sig_action: Option<crate::sign_ui::PanelAction> = None;
@@ -37,6 +39,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
         let tags_state = &mut app.tags_state;
         let compare = &app.compare;
         let comment_allowed = doc.allows_annotation();
+        let carry = app.page_carry.as_ref().filter(|_| ui.input(|i| i.pointer.primary_down() || i.pointer.primary_released()));
         // A dialog or the palette owns the keyboard: the panel leaves Escape to it.
         let modal = app.dialog.is_some() || app.palette_open;
         egui::Frame::NONE
@@ -216,7 +219,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                             ui.label(tl!("Some bookmarks are not shown here: the panel lists a limited number, nested a limited depth."));
                         }
                     }
-                    RightPanel::Pages => pages(ui, &t, info, view, modal, bm_editable, &mut nav),
+                    RightPanel::Pages => carried = pages(ui, &t, info, view, modal, bm_editable, carry, &mut nav),
                     RightPanel::Fields => {
                         field_properties = fields(
                             ui,
@@ -384,6 +387,9 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     }
     if let Some(e) = panel_edit {
         app.apply_edit(e);
+    }
+    if let Some(gap) = carried {
+        app.drop_page_carry(gap);
     }
     if let Some((name, widget)) = field_properties {
         app.open_field_props(&name, widget);

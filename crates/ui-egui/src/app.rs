@@ -253,6 +253,8 @@ impl PdfCraftApp {
             scan_clean_run: None,
             progress_notice: None,
             page_clipboard: None,
+            page_carry: None,
+            tab_spring: None,
             comment_clipboard: None,
             object_clipboard: None,
             object_clip_mark: Default::default(),
@@ -721,6 +723,7 @@ impl PdfCraftApp {
                 view.pending_pick = None;
             }
         }
+        self.end_stale_page_carry(&ctx);
         self.sync_titles(&ctx);
         // The accessible window takes the same name, so a screen reader (AT-SPI on Linux, UIA on
         // Windows) can tell it apart (#4614). egui builds the root node afresh every pass.

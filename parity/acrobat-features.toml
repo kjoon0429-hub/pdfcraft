@@ -2923,11 +2923,11 @@ title = "Drag pages between documents"
 area = "D"
 tier = "P2"
 milestone = "M4"
-status = "planned"
+status = "shipped"
 commands = []
-tools = []
-evidence = []
-notes = ""
+tools = ["page_insert_file"]
+evidence = ["crates/ui-egui/tests/page_carry.rs::pages_rested_on_another_tab_open_it_and_are_copied_where_dropped", "crates/ui-egui/tests/page_carry.rs::carried_pages_let_go_off_the_panel_copy_nothing", "crates/ui-egui/tests/page_carry.rs::carried_back_to_their_own_tab_pages_move_instead"]
+notes = "Drag thumbnails from the Pages panel onto another document's tab; resting there 0.4 s opens it with its Pages panel, and dropping on that panel copies the pages into the gap (fields that collide are renamed, as Paste does); carried back to their own tab they move. Not yet: dragging from the Organize grid, dropping on the page view, a modifier to move instead of copy, or dragging between windows."
 
 [[feature]]
 id = "organize.page-range-selection"

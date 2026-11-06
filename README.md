@@ -168,6 +168,8 @@ Open **Organize pages** to see every page at once:
 - **Change them:** rotate, delete, insert blank pages, insert pages from another file, and move them earlier or later.
 - **Undo anything:** <kbd>⌘Z</kbd>, then save.
 
+To copy pages into another open document, drag their thumbnails from the Pages panel onto that document's tab and hold them there a moment: the tab opens with its Pages panel, and dropping them between two thumbnails copies them there.
+
 <p align="center">
   <img src="docs/images/pdfcraft-organize.png" alt="The Organize pages grid with the showcase's pages as thumbnails, three of them selected, and the page toolbar above" width="100%">
   <br>

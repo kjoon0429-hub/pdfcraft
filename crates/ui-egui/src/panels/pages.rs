@@ -86,8 +86,19 @@ pub(super) fn thumbnail_size(ui: &mut egui::Ui, t: &Tokens, view: &mut crate::Do
 /// The page thumbnails. A click goes to the page; ⌘/Ctrl-click and ⇧-click pick several pages
 /// (the selection page commands and Print act on) without moving the document. Right-click
 /// offers Extract, Cut, Copy and Paste on the selection, or on the page clicked; dragging
-/// moves the selection, or the page grabbed, to the gap it is dropped on.
-pub(super) fn pages(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, view: &mut crate::DocView, modal: bool, editable: bool, nav: &mut Option<Nav>) {
+/// moves the selection, or the page grabbed, to the gap it is dropped on. Returns the gap pages
+/// carried in from another tab (`carry`) were dropped on, for the app to copy them there.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn pages(
+    ui: &mut egui::Ui,
+    t: &Tokens,
+    info: &DocInfo,
+    view: &mut crate::DocView,
+    modal: bool,
+    editable: bool,
+    carry: Option<&crate::PageCarry>,
+    nav: &mut Option<Nav>,
+) -> Option<usize> {
     let focus_id = ui.make_persistent_id(("pages-keyboard", view.id));
     view.pages_focus_id = Some(focus_id);
     let keyboard = ui.interact(ui.clip_rect(), focus_id, Sense::focusable_noninteractive());
@@ -231,6 +242,7 @@ pub(super) fn pages(ui: &mut egui::Ui, t: &Tokens, info: &DocInfo, view: &mut cr
     }
     page_drag(ui, t, view, &rows, dropped);
     file_drop(ui, t, view, &rows, editable && !modal);
+    carry.and_then(|c| carry_drag(ui, t, c, &rows, editable))
 }
 
 /// Files dragged in from outside go to the gap under the pointer: remember where the panel is
@@ -290,39 +302,67 @@ fn moved_index(p: usize, moving: &[usize], to: usize) -> usize {
     }
 }
 
-/// While thumbnails are dragged: a bar on the gap they would go to, the page count by the
-/// pointer, and scrolling near the panel's edges. On release, queue the move.
+/// While `n` pages are dragged over the Pages panel whose thumbnails are `rows`: a bar on the
+/// gap they would go to (only if they may land, `allowed`), the page count by the pointer, and
+/// scrolling near the panel's edges. Returns that gap, or `None` while the pointer is off the
+/// panel (over the tab strip, say), where letting go drops nothing.
+fn drag_feedback(ui: &mut egui::Ui, t: &Tokens, rows: &[Rect], n: usize, allowed: bool) -> Option<usize> {
+    let pointer = ui.input(|i| i.pointer.interact_pos());
+    let clip = ui.clip_rect();
+    let gap = pointer.filter(|p| clip.contains(*p)).and_then(|p| panel_gap(rows, p.y));
+    if allowed && let (Some(gap), Some(first), Some(last)) = (gap, rows.first(), rows.last()) {
+        let y = rows.get(gap).map_or(last.bottom() + 20.0, |r| r.top() - 3.0);
+        ui.painter().line_segment([pos2(first.left(), y), pos2(first.right(), y)], Stroke::new(3.0, t.accent));
+    }
+    if let Some(p) = pointer {
+        let what = if n == 1 { tl!("1 page").to_string() } else { crate::i18n::fmt(tl!("{n} pages"), &[("n", &n.to_string())]) };
+        // Above everything, not clipped to the panel: the count follows the pointer onto the tabs.
+        let over_all = ui.ctx().layer_painter(egui::LayerId::new(egui::Order::Tooltip, ui.scope_id().with("page_drag_count")));
+        over_all.text(p + vec2(14.0, 14.0), Align2::LEFT_TOP, what, theme::medium(12.0), t.accent_text);
+        if !allowed && gap.is_some() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::NotAllowed);
+        }
+        let edge = 40.0;
+        if clip.x_range().contains(p.x) {
+            if p.y < clip.top() + edge {
+                ui.scroll_with_delta(vec2(0.0, 10.0));
+            } else if p.y > clip.bottom() - edge {
+                ui.scroll_with_delta(vec2(0.0, -10.0));
+            }
+        }
+        ui.ctx().request_repaint();
+    }
+    gap
+}
+
+/// While thumbnails are dragged: [`drag_feedback`]. On release over the panel, queue the move.
 fn page_drag(ui: &mut egui::Ui, t: &Tokens, view: &mut crate::DocView, rows: &[Rect], dropped: bool) {
-    let Some(mut moving) = view.panel_drag.clone() else { return };
+    let Some(moving) = view.panel_drag.clone() else { return };
     // A drag that ended while the panel was closed (or elsewhere) leaves nothing to drop.
     if !dropped && !ui.input(|i| i.pointer.primary_down()) {
         view.panel_drag = None;
         return;
     }
-    let pointer = ui.input(|i| i.pointer.interact_pos());
-    let gap = pointer.and_then(|p| panel_gap(rows, p.y));
-    if let (Some(gap), Some(first), Some(last)) = (gap, rows.first(), rows.last()) {
-        let y = rows.get(gap).map_or(last.bottom() + 20.0, |r| r.top() - 3.0);
-        ui.painter().line_segment([pos2(first.left(), y), pos2(first.right(), y)], Stroke::new(3.0, t.accent));
-    }
-    if let Some(p) = pointer {
-        let n = moving.len();
-        let what = if n == 1 { tl!("1 page").to_string() } else { crate::i18n::fmt(tl!("{n} pages"), &[("n", &n.to_string())]) };
-        ui.painter().text(p + vec2(14.0, 14.0), Align2::LEFT_TOP, what, theme::medium(12.0), t.accent_text);
-        let clip = ui.clip_rect();
-        let edge = 40.0;
-        if p.y < clip.top() + edge {
-            ui.scroll_with_delta(vec2(0.0, 10.0));
-        } else if p.y > clip.bottom() - edge {
-            ui.scroll_with_delta(vec2(0.0, -10.0));
-        }
-        ui.ctx().request_repaint();
-    }
+    let gap = drag_feedback(ui, t, rows, moving.len(), true);
     if !dropped {
         return;
     }
     view.panel_drag = None;
     let Some(gap) = gap else { return };
+    queue_move(view, moving, gap);
+}
+
+/// Pages carried in from another tab ([`crate::PageCarry`]) over this panel: [`drag_feedback`],
+/// and the gap they were let go over, if they may land in this document (`editable`).
+fn carry_drag(ui: &mut egui::Ui, t: &Tokens, carry: &crate::PageCarry, rows: &[Rect], editable: bool) -> Option<usize> {
+    let gap = drag_feedback(ui, t, rows, carry.pages.len(), editable);
+    let released = ui.input(|i| i.pointer.primary_released());
+    gap.filter(|_| released && editable)
+}
+
+/// Queue moving `moving` (page indexes of `view`'s document) to `gap` (0 = before the first
+/// page), keeping them selected and the current page on the page it showed.
+pub(crate) fn queue_move(view: &mut crate::DocView, mut moving: Vec<usize>, gap: usize) {
     moving.sort_unstable();
     moving.dedup();
     let Some(&first) = moving.first() else { return };

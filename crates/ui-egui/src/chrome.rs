@@ -114,6 +114,9 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                 let mut close = None;
                 // The pointer's x while a tab is dragged, for scrolling at the strip's edges.
                 let mut drag_x = None;
+                // Pages dragged out of the Pages panel open the document tab they rest on.
+                let carrying = app.dragging_pages(ui.ctx());
+                let mut spring = None;
                 ui.scope(|ui| {
                     ui.style_mut().always_scroll_the_only_direction = true;
                     let mut area = egui::ScrollArea::horizontal().id_salt("document_tabs").max_width(tabs_width).auto_shrink([true, true]);
@@ -150,6 +153,19 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                                     &mut close,
                                 );
                                 slots.push((i, response.rect));
+                                // By position: while a thumbnail is dragged, egui hovers nothing else.
+                                if carrying
+                                    && app.active != Some(i)
+                                    && ui.ctx().pointer_latest_pos().is_some_and(|p| response.rect.contains(p) && ui.clip_rect().contains(p))
+                                {
+                                    spring = Some(i);
+                                    ui.painter().rect_stroke(
+                                        response.rect,
+                                        CornerRadius { nw: 7, ne: 7, sw: 0, se: 0 },
+                                        Stroke::new(2.0, t.accent),
+                                        egui::StrokeKind::Inside,
+                                    );
+                                }
                                 if response.dragged() || response.drag_stopped() {
                                     dragged = Some((i, response.drag_stopped()));
                                 }
@@ -213,6 +229,7 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                             if let Some(action) = action {
                                 app.tab_action(action);
                             }
+                            app.spring_tab(ui.ctx(), spring);
                             if app.combine_tab.open {
                                 // After the document tabs; its index can't clash with theirs.
                                 let mut close = None;

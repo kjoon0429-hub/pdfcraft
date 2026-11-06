@@ -23,6 +23,7 @@ mod tools;
 
 pub use bookmarks::BmAction;
 pub(crate) use bookmarks::ellipsized_prefix;
+pub(crate) use pages::queue_move;
 pub use right::right_panel;
 pub use tools::left_panel;
 pub(crate) use tools::panel_header;

@@ -291,6 +291,14 @@ fn selected_text_copy_floating_button_honours_permissions() {
         }
         assert!(loaded);
         h.run_steps(2);
+        let on_text = h.state().views[0].glyph_screen_pos(0, 1).expect("text layer");
+        h.hover_at(on_text);
+        h.run_steps(1);
+        let button =
+            |pressed| egui::Event::PointerButton { pos: on_text, button: egui::PointerButton::Secondary, pressed, modifiers: egui::Modifiers::NONE };
+        h.event(button(true));
+        h.event(button(false));
+        h.run_steps(3);
         h.get_by_label("Copy").click();
         let mut did_copy = false;
         for _ in 0..4 {

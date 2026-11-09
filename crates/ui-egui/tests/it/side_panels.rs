@@ -120,17 +120,17 @@ fn f4_toggles_the_side_panel_and_shift_f4_the_tools_panel() {
     h.run_steps(3);
     assert_eq!(h.state().right, None);
     assert!(h.query_by_label(NO_BOOKMARKS).is_none());
-    // F4 again reopens the panel that was open, not the default.
+    // F4 again opens the page thumbnails, not the panel that was open.
     h.key_press(egui::Key::F4);
     h.run_steps(3);
-    h.get_by_label(NO_BOOKMARKS);
+    assert_eq!(h.state().right, Some(pdfcraft_ui_egui::RightPanel::Pages));
     assert!(h.state().left_open);
     h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F4);
     h.run_steps(3);
     assert!(!h.state().left_open);
     assert!(h.query_by_label("Expand all tools").is_none());
     // Shift+F4 leaves the side panel alone.
-    h.get_by_label(NO_BOOKMARKS);
+    assert_eq!(h.state().right, Some(pdfcraft_ui_egui::RightPanel::Pages));
     h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::F4);
     h.run_steps(3);
     h.get_by_label("Expand all tools");

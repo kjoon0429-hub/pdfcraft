@@ -65,7 +65,7 @@ use organize::organize_grid;
 use organize::sharp_enough;
 pub(crate) use page_input::PageToolContext;
 use page_input::{PageInput, cancel_on_escape, page_overlays, page_tool_input, text_layer};
-use selection::{Selection, Span, click_unit, selection_actions};
+use selection::{Selection, Span, click_unit, selection_menu};
 pub use xform::PageXform;
 use xform::snap_to_pixels;
 use zoom::anchored_scroll;
@@ -600,7 +600,8 @@ pub struct DocView {
     pub(crate) all_text: bool,
     /// The selection whose action bar was closed by its Copy button: the bar stays hidden
     /// until the selection changes, as it does once a markup button consumes the selection.
-    actions_dismissed: Option<Selection>,
+    /// The last right-click on the page view landed on the selected text: its menu is the text's.
+    on_selected_text: bool,
     /// The drag in progress started a text selection: the wheel scrolls the page during it
     /// (#721), which egui's scroll area refuses while anything is dragged.
     selection_drag: bool,
@@ -1039,7 +1040,7 @@ impl DocView {
             find: None,
             selection: None,
             all_text: false,
-            actions_dismissed: None,
+            on_selected_text: false,
             selection_drag: false,
             clicks: 0,
             last_press_time: 0.0,
@@ -1831,10 +1832,19 @@ fn draw_pages(
             view.image_selection = None;
         }
     }
+    // A right-click on the selected text is the text's: its menu opens, not the page's or a comment's
+    // under the words.
+    if resp.secondary_clicked() {
+        view.on_selected_text = matches!(tool, QuickTool::Select | QuickTool::ColumnSelect)
+            && resp.interact_pointer_pos().or(pointer).is_some_and(|p| view.selection_contains(p));
+        if view.on_selected_text {
+            view.comments.selected = None;
+        }
+    }
     let PageOut {
         mut canvas_action,
         clicked_link,
-        copy_selected,
+        mut copy_selected,
         mut field_menu,
         field_placed,
         field_props,
@@ -1922,6 +1932,10 @@ fn draw_pages(
         if matches!(menu_for, Some(Owner::Picture { part: PicturePart::Crop(_), .. })) {
             egui::Popup::close_all(ui.ctx());
             ui.close();
+            return;
+        }
+        if view.on_selected_text && view.selection.is_some() {
+            copy_selected |= selection_menu(ui, view, info, prefs, allowed && !env.comments_hidden, can_copy);
             return;
         }
         // Preparing a form: the selected field's menu, on a field.
@@ -3230,7 +3244,7 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
         clicked_link,
         comment_notice,
         copy_comments,
-        mut copy_selected,
+        copy_selected,
         field_menu,
         field_placed,
         mut field_props,
@@ -3266,8 +3280,9 @@ pub fn document_area(app: &mut PdfCraftApp, index: usize, ui: &mut egui::Ui) {
 
     view.viewport_screen = out.inner_rect;
     view.auto_scroll.paint(ui, avail);
-    if unobstructed && matches!(tool, QuickTool::Select | QuickTool::ColumnSelect) {
-        copy_selected |= selection_actions(ui, avail, view, info, prefs, allowed && !comments_hidden, can_copy);
+    // When the page scrolls, its own scroll bar is showing instead.
+    if !view.continuous && view.presentation.is_none() && out.content_size.y <= out.inner_rect.height() + 1.0 {
+        bars::page_scrollbar(ui, view, out.inner_rect, unobstructed);
     }
 
     // Collect all main-page demand, including cached surfaces, for byte admission later.

@@ -5021,7 +5021,16 @@ fn text_selection_action_icons() {
 
     assert!(h.state().views[0].selected_text().is_some());
 
-    // Verify all 6 minimalist action icons are present in the floating menu
+    // Nothing until a right-click on the selected text; then all 6 actions, in its menu.
+    assert!(h.query_all_by_label("Add comment").next().is_none());
+    let on_text = egui::pos2(r.left() + 60.0 / 200.0 * r.width(), p0.y);
+    h.hover_at(on_text);
+    h.run_steps(1);
+    let button =
+        |pressed| egui::Event::PointerButton { pos: on_text, button: egui::PointerButton::Secondary, pressed, modifiers: egui::Modifiers::NONE };
+    h.event(button(true));
+    h.event(button(false));
+    h.run_steps(3);
     assert!(h.query_all_by_label("Add comment").next().is_some());
     assert!(h.query_all_by_label("Highlight").next().is_some());
     assert!(h.query_all_by_label("Underline").next().is_some());

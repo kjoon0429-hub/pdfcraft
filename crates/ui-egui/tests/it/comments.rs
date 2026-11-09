@@ -546,11 +546,24 @@ fn a_selection_made_first_is_marked_when_a_tool_is_picked() {
     assert!(h.state().views[0].selected_text().is_none(), "the selection is consumed");
 }
 
+/// A right-click on glyph `glyph`, which opens the selected text's menu when it is selected.
+fn right_click_glyph(h: &mut Harness<'static, PdfCraftApp>, glyph: usize) {
+    let at = h.state().views[0].glyph_screen_pos(0, glyph).expect("text layer");
+    h.hover_at(at);
+    h.run_steps(1);
+    let button = |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed, modifiers: egui::Modifiers::NONE };
+    h.event(button(true));
+    h.event(button(false));
+    h.run_steps(3);
+}
+
 #[test]
 fn selected_text_shows_actions_and_underlines_without_changing_tools() {
     let mut h = harness(|_| {});
     h.state_mut().views[0].select_text(0, 4, 8);
     h.run_steps(3);
+    assert!(h.query_by_label("Replace text").is_none(), "nothing until the right-click");
+    right_click_glyph(&mut h, 6);
     h.get_by_label("Add comment");
     h.get_by_label("Replace text");
     h.get_by_label("Underline").click();
@@ -563,22 +576,22 @@ fn selected_text_shows_actions_and_underlines_without_changing_tools() {
 }
 
 #[test]
-fn selected_text_copy_action_closes_the_bar_and_keeps_the_selection() {
+fn selected_text_copy_action_closes_the_menu_and_keeps_the_selection() {
     let mut h = harness(|_| {});
     h.state_mut().views[0].select_text(0, 4, 8);
     h.run_steps(3);
+    right_click_glyph(&mut h, 6);
     h.get_by_label("Copy").click();
     h.run_steps(3);
-    assert!(h.query_by_label("Add comment").is_none(), "the action bar closes after Copy");
+    assert!(h.query_by_label("Add comment").is_none(), "the menu closes after Copy");
     assert!(h.state().views[0].selected_text().is_some_and(|t| !t.is_empty()), "the words stay selected");
-    // A new selection brings the bar back.
-    h.state_mut().views[0].select_text(0, 2, 6);
-    h.run_steps(3);
+    // The same words' menu opens again.
+    right_click_glyph(&mut h, 6);
     h.get_by_label("Add comment");
 }
 
 #[test]
-fn dragging_over_copied_text_again_brings_the_action_bar_back() {
+fn dragging_over_text_shows_no_menu_until_a_right_click_on_it() {
     let mut h = harness(|_| {});
     let (a, b) = {
         let v = &h.state().views[0];
@@ -587,13 +600,15 @@ fn dragging_over_copied_text_again_brings_the_action_bar_back() {
     drag(&mut h, a, b);
     let copied = h.state().views[0].selected_text();
     assert!(copied.is_some(), "the drag selects text");
-    h.get_by_label("Copy").click();
+    assert!(h.query_by_label("Add comment").is_none(), "no menu after the drag");
+    right_click_glyph(&mut h, 6);
+    h.get_by_label("Add comment");
+    h.key_press(egui::Key::Escape);
     h.run_steps(3);
-    assert!(h.query_by_label("Add comment").is_none(), "the action bar closes after Copy");
-    // The same drag again selects the same words, which is a new selection: the bar is back.
+    // The same drag again selects the same words, and again shows nothing.
     drag(&mut h, a, b);
     assert_eq!(h.state().views[0].selected_text(), copied, "the drag selects the same words");
-    assert!(h.query_by_label("Add comment").is_some(), "the action bar is back after a new drag");
+    assert!(h.query_by_label("Add comment").is_none(), "no menu after a new drag");
 }
 
 #[test]
@@ -601,6 +616,7 @@ fn selected_text_replace_action_opens_replacement_composer() {
     let mut h = harness(|_| {});
     h.state_mut().views[0].select_text(0, 4, 8);
     h.run_steps(3);
+    right_click_glyph(&mut h, 6);
     h.get_by_label("Replace text").click();
     h.run_steps(2);
     h.get_by_role_and_label(Role::MultilineTextInput, "Replacement text");
@@ -612,6 +628,7 @@ fn selected_text_comment_action_opens_note_composer() {
     let mut h = harness(|_| {});
     h.state_mut().views[0].select_text(0, 4, 8);
     h.run_steps(3);
+    right_click_glyph(&mut h, 6);
     h.get_by_label("Add comment").click();
     h.run_steps(2);
     assert!(matches!(h.state().views[0].comments.composer.as_ref().map(|c| &c.kind), Some(pdfcraft_ui_egui::comments::ComposerKind::Note)));

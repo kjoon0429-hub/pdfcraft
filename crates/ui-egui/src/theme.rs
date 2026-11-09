@@ -478,10 +478,14 @@ pub fn apply(ctx: &egui::Context, kind: ThemeKind) {
         s.spacing.item_spacing = egui::vec2(8.0, 6.0);
         s.spacing.button_padding = egui::vec2(10.0, 5.0);
         s.spacing.menu_margin = egui::Margin::same(6);
-        s.spacing.scroll.bar_width = 8.0;
+        s.spacing.scroll.bar_width = 10.0;
         s.spacing.scroll.floating = true;
-        s.spacing.scroll.floating_width = 3.0;
+        s.spacing.scroll.floating_width = 6.0;
         s.spacing.scroll.foreground_color = true;
+        // Always on show, not only while the pointer is over the scrolled area.
+        s.spacing.scroll.dormant_handle_opacity = 0.45;
+        s.spacing.scroll.active_handle_opacity = 0.6;
+        s.spacing.scroll.interact_handle_opacity = 0.8;
         s.text_styles.insert(egui::TextStyle::Body, regular(13.0));
         s.text_styles.insert(egui::TextStyle::Button, regular(13.0));
         s.text_styles.insert(egui::TextStyle::Small, regular(11.0));

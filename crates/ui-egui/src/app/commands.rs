@@ -188,8 +188,8 @@ impl PdfCraftApp {
         }
     }
 
-    /// F4: closes the side panel, or reopens the one open last.
+    /// F4: closes the side panel, or opens it on the page thumbnails, whichever was open last.
     pub(crate) fn toggle_side_panel(&mut self) {
-        self.choose_right_panel(if self.right.is_some() { None } else { Some(self.last_right) });
+        self.choose_right_panel(if self.right.is_some() { None } else { Some(RightPanel::Pages) });
     }
 }

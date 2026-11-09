@@ -319,7 +319,7 @@ pub fn command(app: &mut PdfCraftApp, reset: bool, params: &Value) -> Result<Val
     }
     match (pane, open) {
         (Pane::Tools, Some(open)) => app.left_open = open,
-        (Pane::Side, Some(true)) if app.right.is_none() => app.toggle_side_panel(),
+        (Pane::Side, Some(true)) if app.right.is_none() => app.choose_right_panel(Some(app.last_right)),
         (Pane::Side, Some(false)) if app.right.is_some() => app.choose_right_panel(None),
         _ => {}
     }

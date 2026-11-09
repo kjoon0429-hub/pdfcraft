@@ -124,6 +124,7 @@ pub(super) fn pages(
     {
         delete_pages(view, info.pages.len());
     }
+    menu_keys(ui, view, modal, editable, owns_keyboard);
     // A new current page scrolls its thumbnail into view, as little as it takes (Acrobat), but
     // not while thumbnails are dragged: then the change counts as seen. A wheel turned or a
     // scroll bar dragged by the user already wins over a scroll to a place in egui.
@@ -201,38 +202,38 @@ pub(super) fn pages(
                 if !view.target_pages().contains(&i) {
                     view.click_page(i, egui::Modifiers::NONE, true);
                 }
-                if ui.button(tl!("Extract pages")).clicked() {
+                if menu_item(ui, true, tl!("Extract pages"), "X").clicked() {
                     view.pending_action = Some(crate::canvas::ViewAction::Extract);
                     ui.close();
                 }
-                if ui.button(tl!("Split document…")).clicked() {
+                if menu_item(ui, true, tl!("Split document…"), "S").clicked() {
                     if view.selected.is_empty() {
                         view.select_pages(&[i]);
                     }
                     view.pending_action = Some(crate::canvas::ViewAction::SplitBeforeSelected);
                     ui.close();
                 }
-                if ui.add_enabled(editable, egui::Button::new(tl!("Replace pages…"))).clicked() {
+                if menu_item(ui, editable, tl!("Replace pages…"), "R").clicked() {
                     view.pending_action = Some(crate::canvas::ViewAction::ReplacePages);
                     ui.close();
                 }
                 ui.separator();
-                if ui.add_enabled(editable, egui::Button::new(tl!("Cut"))).clicked() {
+                if menu_item(ui, editable, tl!("Cut"), &chord(ui, "X")).clicked() {
                     view.pending_action = Some(crate::canvas::ViewAction::CopyPages { cut: true });
                     ui.close();
                 }
-                if ui.button(tl!("Copy")).clicked() {
+                if menu_item(ui, true, tl!("Copy"), &chord(ui, "C")).clicked() {
                     view.pending_action = Some(crate::canvas::ViewAction::CopyPages { cut: false });
                     ui.close();
                 }
-                if ui.add_enabled(editable, egui::Button::new(tl!("Paste after"))).clicked() {
+                if menu_item(ui, editable, tl!("Paste after"), &chord(ui, "V")).clicked() {
                     view.pending_action = Some(crate::canvas::ViewAction::PastePages);
                     ui.close();
                 }
                 ui.separator();
                 let some_left = view.target_pages().len() < count;
                 // Never every page: a document keeps at least one.
-                if ui.add_enabled(editable && some_left, egui::Button::new(tl!("Delete pages"))).clicked() {
+                if menu_item(ui, editable && some_left, tl!("Delete pages"), "Del").clicked() {
                     delete_pages(view, count);
                     ui.close();
                 }
@@ -243,6 +244,63 @@ pub(super) fn pages(
     page_drag(ui, t, view, &rows, dropped);
     file_drop(ui, t, view, &rows, editable && !modal);
     carry.and_then(|c| carry_drag(ui, t, c, &rows, editable))
+}
+
+/// A menu entry with its key shown at the right; screen readers get the entry's name alone.
+fn menu_item(ui: &mut egui::Ui, enabled: bool, label: &str, keys: &str) -> egui::Response {
+    let entry = ui.add_enabled(enabled, egui::Button::new(label).shortcut_text(keys));
+    entry.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, label));
+    entry
+}
+
+/// ⌘ or Ctrl and `key`, as the platform writes it.
+fn chord(ui: &egui::Ui, key: &'static str) -> String {
+    crate::commands::shortcut_label(ui.ctx(), pdfcraft_engine::commands::Shortcut::cmd(key))
+}
+
+/// The keys of the thumbnails' right-click menu, on the selection or the current page. Plain letters
+/// work as Delete does, with the panel's focus or the pointer over it. The clipboard's need the
+/// panel's focus (a click on a thumbnail): over it alone, they still copy and paste in the document.
+fn menu_keys(ui: &mut egui::Ui, view: &mut crate::DocView, modal: bool, editable: bool, owns_keyboard: bool) {
+    use crate::canvas::ViewAction;
+    use egui::{Key, KeyboardShortcut, Modifiers};
+    if modal {
+        return;
+    }
+    if (owns_keyboard || !ui.ctx().egui_wants_keyboard_input()) && (owns_keyboard || ui.rect_contains_pointer(ui.clip_rect())) {
+        let key = |k| ui.input_mut(|i| i.consume_key(Modifiers::NONE, k));
+        if key(Key::X) {
+            view.pending_action = Some(ViewAction::Extract);
+        } else if key(Key::S) {
+            if view.selected.is_empty() {
+                view.select_pages(&[view.current]);
+            }
+            view.pending_action = Some(ViewAction::SplitBeforeSelected);
+        } else if editable && key(Key::R) {
+            view.pending_action = Some(ViewAction::ReplacePages);
+        }
+    }
+    if owns_keyboard {
+        // egui delivers these as clipboard events, on some platforms as the keys too.
+        let (copy, cut, paste) = ui.input_mut(|i| {
+            let mut sent = |wanted: fn(&egui::Event) -> bool, k| {
+                let event = i.events.iter().any(wanted);
+                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, k)) || event
+            };
+            (
+                sent(|e| matches!(e, egui::Event::Copy), Key::C),
+                sent(|e| matches!(e, egui::Event::Cut), Key::X),
+                sent(|e| matches!(e, egui::Event::Paste(_) | egui::Event::PasteImage(_)), Key::V),
+            )
+        });
+        if copy {
+            view.pending_action = Some(ViewAction::CopyPages { cut: false });
+        } else if cut && editable {
+            view.pending_action = Some(ViewAction::CopyPages { cut: true });
+        } else if paste && editable {
+            view.pending_action = Some(ViewAction::PastePages);
+        }
+    }
 }
 
 /// Files dragged in from outside go to the gap under the pointer: remember where the panel is

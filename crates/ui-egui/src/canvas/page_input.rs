@@ -721,7 +721,6 @@ fn update_selection_on_press(ui: &egui::Ui, view: &mut DocView, text: &PageText,
         }
     }
     if gesture.ptr.drag_started && press_here && gesture.text_drag {
-        view.actions_dismissed = None;
         view.selection_drag = true;
         let origin = gesture.ptr.origin.unwrap_or(gesture.pointer);
         let (ox, oy) = gesture.xf.screen_to_view(origin);

@@ -1,4 +1,4 @@
-use super::{Arc, DocInfo, DocView, Edit, HashMap, PageText, Pos2, Range, Rect, comments, pos2};
+use super::{Arc, DocInfo, DocView, Edit, HashMap, PageText, Pos2, Range, comments};
 
 /// A text selection on one page.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -64,7 +64,13 @@ impl DocView {
 
     pub(crate) fn clear_selection(&mut self) {
         self.selection = None;
-        self.actions_dismissed = None;
+    }
+
+    /// Whether screen point `p` is on the selected text (a little around it counts).
+    pub(crate) fn selection_contains(&self, p: Pos2) -> bool {
+        let Some(s) = self.selection else { return false };
+        let (Some(text), Some(xf)) = (self.texts.get(&s.page), self.page_xform(s.page)) else { return false };
+        s.rects(text).into_iter().any(|r| xf.view_rect(r).expand(2.0).contains(p))
     }
 
     /// Select text on `page` from glyph `from` to glyph `to` (tests and automation).
@@ -172,67 +178,38 @@ enum SelectionAction {
     Copy,
 }
 
-/// Actions on an existing text selection, next to the selected words.
-pub(super) fn selection_actions(
+/// The menu of a right-click on the selected text. Returns whether Copy was chosen, which the app
+/// dispatches once the view is no longer borrowed; it keeps the words selected, the others don't.
+pub(super) fn selection_menu(
     ui: &mut egui::Ui,
-    viewport: Rect,
     view: &mut DocView,
     info: &DocInfo,
     prefs: &comments::CommentPrefs,
     can_comment: bool,
     can_copy: bool,
 ) -> bool {
-    if ui.input(|input| input.pointer.is_decidedly_dragging()) {
-        return false;
-    }
-    let Some(selection) = view.selection else {
-        view.actions_dismissed = None;
-        return false;
-    };
-    if view.actions_dismissed == Some(selection) {
-        return false;
-    }
-    let Some(text) = view.texts.get(&selection.page) else { return false };
-    let Some(xf) = view.page_xform(selection.page) else { return false };
-    let Some(last) = selection.rects(text).last().copied() else { return false };
-    let selected = selection.text(text);
-    if selected.is_empty() {
-        return false;
-    }
-    let rect = xf.view_rect(last);
-    if !viewport.intersects(rect) {
-        return false;
-    }
-    let x = rect.left().clamp(viewport.left() + 8.0, (viewport.right() - 520.0).max(viewport.left() + 8.0));
-    let y = if rect.bottom() + 48.0 < viewport.bottom() { rect.bottom() + 6.0 } else { (rect.top() - 44.0).max(viewport.top() + 6.0) };
     let mut chosen = None;
-    egui::Area::new(egui::Id::unique(("text-selection-actions", view.id.0))).order(egui::Order::Foreground).fixed_pos(pos2(x, y)).show(
-        ui.ctx(),
-        |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for (label, action) in [
-                        (tl!("Add comment"), SelectionAction::Note),
-                        (tl!("Highlight"), SelectionAction::Markup(comments::CommentTool::Highlight)),
-                        (tl!("Underline"), SelectionAction::Markup(comments::CommentTool::Underline)),
-                        (tl!("Strikethrough"), SelectionAction::Markup(comments::CommentTool::StrikeOut)),
-                        (tl!("Replace text"), SelectionAction::Replace),
-                    ] {
-                        if ui.add_enabled(can_comment, egui::Button::new(label)).clicked() {
-                            chosen = Some(action);
-                        }
-                    }
-                    if ui.add_enabled(can_copy, egui::Button::new(tl!("Copy"))).clicked() {
-                        chosen = Some(SelectionAction::Copy);
-                    }
-                });
-            });
-        },
-    );
+    for (label, action) in [
+        (tl!("Add comment"), SelectionAction::Note),
+        (tl!("Highlight"), SelectionAction::Markup(comments::CommentTool::Highlight)),
+        (tl!("Underline"), SelectionAction::Markup(comments::CommentTool::Underline)),
+        (tl!("Strikethrough"), SelectionAction::Markup(comments::CommentTool::StrikeOut)),
+        (tl!("Replace text"), SelectionAction::Replace),
+    ] {
+        if ui.add_enabled(can_comment, egui::Button::new(label)).clicked() {
+            chosen = Some(action);
+        }
+    }
+    ui.separator();
+    let copy = egui::Button::new(tl!("Copy")).shortcut_text(crate::commands::shortcut_label(ui.ctx(), crate::commands::COPY));
+    let copy = ui.add_enabled(can_copy, copy);
+    copy.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, can_copy, tl!("Copy")));
+    if copy.clicked() {
+        chosen = Some(SelectionAction::Copy);
+    }
     let Some(action) = chosen else { return false };
+    ui.close();
     if let SelectionAction::Copy = action {
-        // Copying closes the bar but keeps the words selected, for ⌘C or a second action.
-        view.actions_dismissed = Some(selection);
         return true;
     }
     let Some((page, quads)) = view.selection_quads(info) else { return false };
@@ -263,7 +240,6 @@ pub(super) fn selection_actions(
                 author: prefs.author.clone(),
             }));
         }
-        // Copy is dispatched through the app after the view borrow ends.
         SelectionAction::Copy => {}
     }
     false

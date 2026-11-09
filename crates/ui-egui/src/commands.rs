@@ -317,9 +317,13 @@ impl PdfCraftApp {
                 use crate::canvas::{Fit, PageLayout};
                 // Fit one full page shows a single page on its own; fit width scrolls it.
                 let (continuous, fit) = if id == "view.fit_one_page" { (false, Fit::Page) } else { (true, Fit::Width) };
-                if let Some(i) = active {
-                    self.views[i].set_display(PageLayout::Single, continuous);
-                    self.views[i].set_fit(fit);
+                // A standing choice: for every tab, and for the documents opened from now on.
+                (self.view_defaults.layout, self.view_defaults.continuous, self.view_defaults.fit) = (PageLayout::Single, continuous, fit);
+                for view in &mut self.views {
+                    view.set_display(PageLayout::Single, continuous);
+                    if view.fit != fit {
+                        view.set_fit(fit);
+                    }
                 }
             }
             "view.full_screen" => {

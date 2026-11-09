@@ -23,6 +23,11 @@ impl DocView {
         self.reset_coarse_state();
     }
 
+    /// Whether this is View ▸ Page display ▸ Fit one full page: one page at a time, whole.
+    pub fn fits_one_page(&self) -> bool {
+        self.layout == PageLayout::Single && !self.continuous() && self.fit == Fit::Page
+    }
+
     /// Full screen, as Acrobat's Full Screen Mode (#379, #1459): one page at a time (or one
     /// spread, when two-page view was on: #1353), fitted to the screen, from the current page.
     /// The display it replaces is kept for [`Self::leave_presentation`]. A no-op while presenting.

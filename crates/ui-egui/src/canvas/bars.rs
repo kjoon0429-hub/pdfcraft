@@ -1,5 +1,37 @@
 use super::{Color32, CornerRadius, DocInfo, DocView, PdfCraftApp, Pos2, Rect, Sense, SnapshotKind, Stroke, Tokens, icons, vec2};
 
+/// One page at a time, nothing scrolls, so no scroll bar says where in the document the page is:
+/// this one does, at the right edge of `area`. A press or drag goes to the page at that height.
+pub(super) fn page_scrollbar(ui: &mut egui::Ui, view: &mut DocView, area: Rect, enabled: bool) {
+    let last = view.page_count.saturating_sub(1);
+    if last == 0 || area.height() < 40.0 {
+        return;
+    }
+    let track = Rect::from_min_max(Pos2::new(area.right() - 12.0, area.top() + 4.0), Pos2::new(area.right() - 1.0, area.bottom() - 4.0));
+    let handle_h = (track.height() / view.page_count as f32).clamp(24.0, track.height());
+    let travel = track.height() - handle_h;
+    let sense = if enabled { Sense::click_and_drag() } else { Sense::hover() };
+    let resp = ui.interact(track, ui.make_persistent_id(("page-scrollbar", view.id)), sense);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ScrollBar, enabled, "Page scrollbar"));
+    if travel > 0.0
+        && (resp.dragged() || resp.clicked())
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let along = ((p.y - track.top() - handle_h / 2.0) / travel).clamp(0.0, 1.0);
+        // In range: `along` is 0..=1, and a cast saturates. A two-page row goes where its page does.
+        let page = (along * last as f32).round() as usize;
+        if page != view.current {
+            view.go_to_page(page);
+        }
+    }
+    let top = track.top() + travel * (view.current.min(last) as f32 / last as f32);
+    let live = resp.hovered() || resp.dragged();
+    let width = if live { 10.0 } else { 6.0 };
+    let handle = Rect::from_min_max(Pos2::new(track.right() - width - 1.0, top), Pos2::new(track.right() - 1.0, top + handle_h));
+    let color = ui.visuals().text_color().gamma_multiply(if live { 0.8 } else { 0.45 });
+    ui.painter().rect_filled(handle, CornerRadius::same(4), color);
+}
+
 /// Whether `p` lies in the bottom-left quadrant of `area`, where the page size shows (#1855).
 pub(super) fn in_size_hint_zone(area: Rect, p: Pos2) -> bool {
     p.x >= area.min.x && p.x < area.center().x && p.y > area.center().y && p.y <= area.max.y

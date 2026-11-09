@@ -832,10 +832,11 @@ fn page_display_menu(ui: &mut egui::Ui, view: &DocView) -> Option<&'static str> 
 /// apply at once; the command a click asks for is returned for the caller to run.
 fn rail_view_menu(ui: &mut egui::Ui, view: &mut DocView) -> Option<&'static str> {
     let mut picked = None;
-    for (id, label) in [("view.fit_width_scrolling", "Fit to width scrolling"), ("view.fit_one_page", "Fit one full page")] {
-        if ui.button(tl!(label)).clicked() {
-            picked = Some(id);
-        }
+    if ui.button(tl!("Fit to width scrolling")).clicked() {
+        picked = Some("view.fit_width_scrolling");
+    }
+    if ui.add(egui::Button::selectable(view.fits_one_page(), tl!("Fit one full page"))).clicked() {
+        picked = Some("view.fit_one_page");
     }
     ui.separator();
     if ui.button(tl!("Actual size")).clicked() {

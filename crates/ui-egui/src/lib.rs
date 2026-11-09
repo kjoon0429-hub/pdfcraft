@@ -311,7 +311,7 @@ pub struct PdfCraftApp {
     pub left: LeftPanel,
     pub left_open: bool,
     pub right: Option<RightPanel>,
-    /// The side panel F4 reopens: the one open last.
+    /// The side panel open last, which the control channel's `open` reopens.
     pub(crate) last_right: RightPanel,
     /// The right panel that was open when the user switched to Read mode, which starts with the
     /// panes closed; leaving Read mode brings it back unless the user opened or closed a pane in

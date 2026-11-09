@@ -102,7 +102,16 @@ impl PdfCraftApp {
     /// Show view `index` as its document's file was last shown, when the preference is on and
     /// the file is remembered. Applied after the document's own initial view, which it
     /// overrides: where the reader left off is what they asked to come back to.
+    /// Fit one full page, once chosen, holds for every document: over the file's own initial view
+    /// and over how the file was last shown, of which only the page comes back.
     pub(crate) fn apply_last_view(&mut self, index: usize) {
+        let d = self.view_defaults;
+        let one_page = d.layout == canvas::PageLayout::Single && !d.continuous && d.fit == canvas::Fit::Page;
+        if one_page && let Some(view) = self.views.get_mut(index) {
+            view.set_display(d.layout, d.continuous);
+            view.set_cover(false);
+            view.set_fit(d.fit);
+        }
         if !self.restore_last_view {
             return;
         }
@@ -112,14 +121,16 @@ impl PdfCraftApp {
         let pages = doc.info.pages.len();
         let Some(last) = self.last_views.iter().find(|l| l.path == path).cloned() else { return };
         let Some(view) = self.views.get_mut(index) else { return };
-        if let Some((layout, continuous)) = canvas::parse_display_token(&last.display) {
-            view.set_display(layout, continuous);
-        }
-        view.set_cover(last.cover);
-        if let Some(defaults) = ViewDefaults::default().with_zoom(&last.zoom) {
-            match defaults.fit {
-                canvas::Fit::None => view.set_zoom(defaults.zoom),
-                fit => view.set_fit(fit),
+        if !one_page {
+            if let Some((layout, continuous)) = canvas::parse_display_token(&last.display) {
+                view.set_display(layout, continuous);
+            }
+            view.set_cover(last.cover);
+            if let Some(defaults) = ViewDefaults::default().with_zoom(&last.zoom) {
+                match defaults.fit {
+                    canvas::Fit::None => view.set_zoom(defaults.zoom),
+                    fit => view.set_fit(fit),
+                }
             }
         }
         if last.page < pages {

@@ -508,6 +508,7 @@ impl PdfCraftApp {
             "view.continuous" => Some(view.is_some_and(|v| v.continuous())),
             "view.page_gaps" => Some(view.is_some_and(|v| v.show_page_gaps)),
             "view.layout.cover" => Some(view.is_some_and(|v| v.cover)),
+            "view.fit_one_page" => Some(view.is_some_and(|v| v.fits_one_page())),
             "view.full_screen" => Some(self.full_screen),
             "view.read_mode" => Some(self.mode == crate::Mode::Read),
             "view.side_panel" => Some(self.right.is_some()),
@@ -727,6 +728,11 @@ mod tests {
         let kind = |app: &PdfCraftApp, id: &str| item(&linux(app, &ctx), &CommandRef::new(id)).kind;
         assert_eq!(kind(&app, "view.layout.single"), ItemKind::Radio(true));
         assert_eq!(kind(&app, "view.layout.two_up"), ItemKind::Radio(false));
+        assert_eq!(kind(&app, "view.fit_one_page"), ItemKind::Check(false));
+        app.run_menu_command(&ctx, &CommandRef::new("view.fit_one_page"));
+        assert_eq!(kind(&app, "view.fit_one_page"), ItemKind::Check(true));
+        app.run_menu_command(&ctx, &CommandRef::new("view.fit_width_scrolling"));
+        assert_eq!(kind(&app, "view.fit_one_page"), ItemKind::Check(false));
         let continuous = app.views[0].continuous();
         assert_eq!(kind(&app, "view.continuous"), ItemKind::Check(continuous));
         app.run_menu_command(&ctx, &CommandRef::new("view.layout.two_up"));

@@ -155,6 +155,38 @@ fn the_preference_keeps_the_check_at_start_from_reaching_the_network() {
     h.get_by_label_contains("PdfCraft 99.0.0 is available");
 }
 
+/// This fork's desktop build: nothing asks for a release, at start or from the Help menu, and the
+/// setting that would mean nothing is gone. The same start without it does ask (the test above).
+#[test]
+fn a_build_with_updates_off_never_asks() {
+    use std::sync::atomic::Ordering::SeqCst;
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counted = calls.clone();
+    // Off before the first frame, as apps/pdfcraft/src/main.rs does.
+    let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.set_option("language", "en").unwrap();
+        app.set_startup_update_check(true);
+        app.disable_updates();
+        let counted = counted.clone();
+        app.set_update_source(Arc::new(move || {
+            counted.fetch_add(1, SeqCst);
+            Ok(Some(release("v99.0.0")))
+        }));
+        app
+    });
+    run_until_asked(&mut h, &calls, std::time::Duration::from_millis(500));
+    assert_eq!(calls.load(SeqCst), 0, "nothing is asked at start");
+    h.state_mut().execute("help.check_updates");
+    assert!(h.state().toast.as_ref().is_some_and(|(m, _)| m.contains("doesn't update itself")), "and it says why");
+    run_until_asked(&mut h, &calls, std::time::Duration::from_millis(500));
+    assert_eq!(calls.load(SeqCst), 0, "nor from the Help menu");
+    assert!(h.query_by_label_contains("is available").is_none());
+    h.state_mut().execute("app.preferences");
+    h.run_steps(3);
+    assert!(h.query_by_label("Check for updates when PdfCraft starts").is_none());
+}
+
 /// The setting is about starting: turning it on asks nothing until the next start.
 #[test]
 fn turning_the_check_at_start_on_waits_for_the_next_start() {

@@ -27,6 +27,10 @@ pub(crate) struct Updates {
     startup_check: bool,
     #[cfg(not(target_arch = "wasm32"))]
     check_requested: bool,
+    /// This fork's desktop builds never update themselves: the official release they would fetch
+    /// lacks the fork's own features, so updating would silently remove them.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) disabled: bool,
 }
 
 impl Default for Updates {
@@ -39,6 +43,8 @@ impl Default for Updates {
             startup_check: false,
             #[cfg(not(target_arch = "wasm32"))]
             check_requested: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            disabled: false,
         }
     }
 }
@@ -48,6 +54,14 @@ impl PdfCraftApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn set_startup_update_check(&mut self, on: bool) {
         self.updates.startup_check = on;
+    }
+
+    /// Turns updating off for this run: no check at start, and Help ▸ Check for updates only
+    /// says why (the desktop app of this fork; see [`Updates::disabled`]).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn disable_updates(&mut self) {
+        self.updates.disabled = true;
+        self.updates.startup_check = false;
     }
 
     /// Replaces the network with `source` (tests).
@@ -60,6 +74,10 @@ impl PdfCraftApp {
     pub fn check_for_updates(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         {
+            if self.updates.disabled {
+                self.notify(tl!("This build doesn't update itself: official updates would remove its added features."));
+                return;
+            }
             self.updates.open = true;
             self.updates.check_requested = true;
         }

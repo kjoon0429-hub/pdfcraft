@@ -246,3 +246,68 @@ fn the_thumbnails_menu_shows_its_keys() {
     h.get_by_label_contains("Delete pages");
     h.get_by_label_contains("Paste after");
 }
+
+/// A document with an unsaved edit, and the "Save changes?" prompt its closing opened.
+fn closing_a_changed_document() -> Harness<'static, PdfCraftApp> {
+    let mut h = one_doc();
+    assert!(h.state_mut().execute("page.rotate"));
+    h.run_steps(3);
+    assert!(h.state_mut().execute("file.close"));
+    h.run_steps(3);
+    h.get_by_label_contains("Save changes to");
+    h
+}
+
+#[test]
+fn the_save_prompt_answers_n_y_and_c() {
+    let mut h = closing_a_changed_document();
+    h.get_by_label("Don't save");
+    h.key_press(egui::Key::C);
+    h.run_steps(3);
+    assert_eq!(h.state().views.len(), 1, "C cancels");
+    assert!(h.state().close_request.is_none());
+
+    assert!(h.state_mut().execute("file.close"));
+    h.run_steps(3);
+    h.key_press(egui::Key::N);
+    h.run_steps(3);
+    assert!(h.state().views.is_empty(), "N closes without saving");
+
+    let mut h = closing_a_changed_document();
+    let out = std::env::temp_dir().join(format!("pdfcraft-fork-ui-y-{}.pdf", std::process::id()));
+    h.state_mut().save_override = Some(out.to_string_lossy().into_owned());
+    h.key_press(egui::Key::Y);
+    h.run_steps(3);
+    assert!(h.state().views.is_empty(), "Y saves and closes");
+    let saved = pdfcraft_render::inspect(std::sync::Arc::new(std::fs::read(&out).unwrap()), None).unwrap();
+    assert_eq!(saved.pages[0].rotation, 90, "saved with the edit");
+    let _ = std::fs::remove_file(out);
+}
+
+#[test]
+fn ctrl_shift_x_extracts_from_the_thumbnails_without_their_menu_and_cuts_nothing() {
+    let mut h = with_pages_panel();
+    h.get_all_by_label("Page 2").max_by(|a, b| a.rect().left().total_cmp(&b.rect().left())).expect("the thumbnail").click();
+    h.run_steps(3);
+    h.key_press_modifiers(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, egui::Key::X);
+    h.run_steps(3);
+    assert!(h.state().dialog.is_some(), "the Extract dialog");
+    assert!(h.state().page_clipboard.is_none(), "not Cut");
+    let s = h.state();
+    assert_eq!(s.session.get(s.views[0].id).unwrap().info.pages.len(), 4);
+}
+
+#[test]
+fn x_in_the_thumbnails_open_menu_extracts_though_the_panel_had_no_focus() {
+    let mut h = with_pages_panel();
+    let t = thumb(&h, "Page 3");
+    right_click(&mut h, t);
+    h.get_by_label("Extract pages");
+    // Off the panel, on the menu: only the menu can take the key.
+    h.hover_at(h.get_by_label("Extract pages").rect().center());
+    h.run_steps(1);
+    h.key_press(egui::Key::X);
+    h.run_steps(3);
+    assert!(h.state().dialog.is_some(), "the Extract dialog");
+    assert!(h.query_by_label("Split document…").is_none(), "the menu closed");
+}

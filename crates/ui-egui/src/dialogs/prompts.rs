@@ -43,7 +43,7 @@ impl PromptButton {
 /// the button chosen when the prompt opens, so Enter saves; the arrow keys and Tab / Shift+Tab move
 /// the choice, and Enter or Space press the chosen button. Escape cancels. Don't save also has
 /// ⌘D / Ctrl+D, the macOS convention, and Alt+D / Alt+N, the mnemonics Windows and Linux desktops
-/// use for it. Returns the answer once one is given.
+/// use for it. N, Y and C answer Don't save, Save and Cancel. Returns the answer once one is given.
 pub(crate) fn save_prompt_key(ctx: &egui::Context, chosen: &mut PromptButton) -> Option<Option<bool>> {
     use egui::{Key, Modifiers};
     ctx.input_mut(|i| {
@@ -52,6 +52,13 @@ pub(crate) fn save_prompt_key(ctx: &egui::Context, chosen: &mut PromptButton) ->
         }
         if i.consume_key(Modifiers::NONE, Key::Escape) {
             return Some(None);
+        }
+        // This fork: a letter answers at once, as the buttons show it: N Don't save, Y Save,
+        // C Cancel.
+        for (key, answer) in [(Key::N, Some(false)), (Key::Y, Some(true)), (Key::C, None)] {
+            if i.consume_key(Modifiers::NONE, key) {
+                return Some(answer);
+            }
         }
         if [(Modifiers::COMMAND, Key::D), (Modifiers::ALT, Key::D), (Modifiers::ALT, Key::N)].into_iter().any(|(m, k)| i.consume_key(m, k)) {
             return Some(Some(false));
@@ -108,14 +115,20 @@ pub(super) fn save_prompt(app: &mut PdfCraftApp, ctx: &egui::Context) {
         ui.add_space(14.0);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let chosen = app.save_prompt_button;
-            if widgets::pill_button_marked(ui, tl!("Save"), true, chosen == PromptButton::Save).clicked() {
+            // Each button shows its letter (`save_prompt_key`); screen readers get its name alone.
+            let button = |ui: &mut egui::Ui, label: &str, key: &str, primary: bool, which: PromptButton| {
+                let pressed = widgets::pill_button_marked(ui, &format!("{label} ({key})"), primary, chosen == which);
+                pressed.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
+                pressed.clicked()
+            };
+            if button(ui, tl!("Save"), "Y", true, PromptButton::Save) {
                 choice = Some(Some(true));
             }
-            if widgets::pill_button_marked(ui, tl!("Cancel"), false, chosen == PromptButton::Cancel).clicked() {
+            if button(ui, tl!("Cancel"), "C", false, PromptButton::Cancel) {
                 choice = Some(None);
             }
             ui.add_space(24.0);
-            if widgets::pill_button_marked(ui, tl!("Don't save"), false, chosen == PromptButton::DontSave).clicked() {
+            if button(ui, tl!("Don't save"), "N", false, PromptButton::DontSave) {
                 choice = Some(Some(false));
             }
         });

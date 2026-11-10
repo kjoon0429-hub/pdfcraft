@@ -202,6 +202,31 @@ pub(super) fn pages(
                 if !view.target_pages().contains(&i) {
                     view.click_page(i, egui::Modifiers::NONE, true);
                 }
+                // The keys the entries show, while the menu is open (the panel need not have the
+                // keyboard: a right-click doesn't give it).
+                let key = |ui: &mut egui::Ui, k| ui.input_mut(|inp| inp.consume_key(egui::Modifiers::NONE, k));
+                let chosen = if key(ui, egui::Key::X) {
+                    Some(crate::canvas::ViewAction::Extract)
+                } else if key(ui, egui::Key::S) {
+                    Some(crate::canvas::ViewAction::SplitBeforeSelected)
+                } else if editable && key(ui, egui::Key::R) {
+                    Some(crate::canvas::ViewAction::ReplacePages)
+                } else {
+                    None
+                };
+                if let Some(action) = chosen {
+                    if matches!(action, crate::canvas::ViewAction::SplitBeforeSelected) && view.selected.is_empty() {
+                        view.select_pages(&[i]);
+                    }
+                    view.pending_action = Some(action);
+                    ui.close();
+                    return;
+                }
+                if editable && view.target_pages().len() < count && key(ui, egui::Key::Delete) {
+                    delete_pages(view, count);
+                    ui.close();
+                    return;
+                }
                 if menu_item(ui, true, tl!("Extract pages"), "X").clicked() {
                     view.pending_action = Some(crate::canvas::ViewAction::Extract);
                     ui.close();
@@ -258,7 +283,8 @@ fn chord(ui: &egui::Ui, key: &'static str) -> String {
     crate::commands::shortcut_label(ui.ctx(), pdfcraft_engine::commands::Shortcut::cmd(key))
 }
 
-/// The keys of the thumbnails' right-click menu, on the selection or the current page. Plain letters
+/// The keys of the thumbnails' right-click menu, on the selection or the current page, and ⌘⇧X or
+/// Ctrl+Shift+X for Extract pages without the menu. Plain letters
 /// work as Delete does, with the panel's focus or the pointer over it. The clipboard's need the
 /// panel's focus (a click on a thumbnail): over it alone, they still copy and paste in the document.
 fn menu_keys(ui: &mut egui::Ui, view: &mut crate::DocView, modal: bool, editable: bool, owns_keyboard: bool) {
@@ -269,7 +295,9 @@ fn menu_keys(ui: &mut egui::Ui, view: &mut crate::DocView, modal: bool, editable
     }
     if (owns_keyboard || !ui.ctx().egui_wants_keyboard_input()) && (owns_keyboard || ui.rect_contains_pointer(ui.clip_rect())) {
         let key = |k| ui.input_mut(|i| i.consume_key(Modifiers::NONE, k));
-        if key(Key::X) {
+        // Before ⌘X below, which a press with Shift as well would match too.
+        let extract = ui.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::X)));
+        if extract || key(Key::X) {
             view.pending_action = Some(ViewAction::Extract);
         } else if key(Key::S) {
             if view.selected.is_empty() {
